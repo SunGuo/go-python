@@ -1,43 +1,11 @@
 package python
 
-/*
-#include "Python.h"
-#include <stdlib.h>
-#include <string.h>
-
-int _gopy_PyModule_Check(PyObject *p) { return PyModule_Check(p); }
-int _gopy_PyModule_CheckExact(PyObject *p) { return PyModule_CheckExact(p); }
-
- int _gopy_PyClass_Check(PyObject *o) { return PyClass_Check(o); }
-
- int _gopy_PyInstance_Check(PyObject *obj) { return PyInstance_Check(obj); }
-
- int _gopy_PyFunction_Check(PyObject *o) { return PyFunction_Check(o); }
-
- int _gopy_PyMethod_Check(PyObject *o) { return PyMethod_Check(o); }
-
- PyObject* _gopy_PyMethod_GET_CLASS(PyObject *meth) { return PyMethod_GET_CLASS(meth); }
-
- PyObject* _gopy_PyMethod_GET_FUNCTION(PyObject *meth) { return PyMethod_GET_FUNCTION(meth); }
-
- PyObject* _gopy_PyMethod_GET_SELF(PyObject *meth) { return PyMethod_GET_SELF(meth); }
-
-
- int _gopy_PySlice_Check(PyObject *ob) { return PySlice_Check(ob); }
-
- int _gopy_PyCapsule_CheckExact(PyObject *p) { return PyCapsule_CheckExact(p); }
-
-#include "frameobject.h"
- int _gopy_PyGen_Check(PyObject *ob) { return _gopy_PyGen_Check(ob); }
- int _gopy_PyGen_CheckExact(PyObject *ob) { return _gopy_PyGen_CheckExact(ob); }
-
-
- int _gopy_PySeqIter_Check(PyObject *op) { return PySeqIter_Check(op); }
- int _gopy_PyCallIter_Check(PyObject *op) { return PyCallIter_Check(op); }
-
-*/
+// #include "go-python.h"
 import "C"
-import "unsafe"
+
+import (
+	"unsafe"
+)
 
 ///// module /////
 
@@ -558,6 +526,14 @@ func PySeqIter_Check(op *PyObject) bool {
 	return int2bool(C._gopy_PySeqIter_Check(topy(op)))
 }
 
+// PyObject* PyIter_Next(PyObject *o)
+// Return value: New reference.
+//
+// Return the next value from the iteration o.  The object must be an iterator (it is up to the caller to check this).  If there are no remaining values, returns NULL with no exception set.  If an error occurs while retrieving the item, returns NULL and passes along the exception.
+func PyIter_Next(op *PyObject) *PyObject {
+  return togo(C.PyIter_Next(topy(op)))
+}
+
 // PyObject* PySeqIter_New(PyObject *seq)
 // Return value: New reference.
 // Return an iterator that works with a general sequence object, seq. The iteration ends when the sequence raises IndexError for the subscripting operation.
@@ -587,6 +563,21 @@ func PyCallIter_Check(op *PyObject) bool {
 // New in version 2.2.
 func PyCallIter_New(callable, sentinel *PyObject) *PyObject {
 	return togo(C.PyCallIter_New(topy(callable), topy(sentinel)))
+}
+
+// PyCodeObject* PyCode_NewEmpty(char *filename, char *funcname, int firstlineno)
+// Return value: New reference.
+// Return an empty CodePythonObject that corresponds to the file name, func name and line number in the source file it points to.
+func PyCode_NewEmpty(filename string, funcname string, firstlineno int) *PyObject {
+	c_filename := C.CString(filename)
+	defer C.free(unsafe.Pointer(c_filename))
+	c_funcname := C.CString(funcname)
+	defer C.free(unsafe.Pointer(c_funcname))
+
+	o := C.PyCode_NewEmpty(c_filename, c_funcname, C.int(firstlineno))
+
+	// need to (unsafe-ly) cast to *C.PyObject as o is a *C.PyCodeObject
+	return togo((*C.PyObject)(unsafe.Pointer(o)))
 }
 
 // EOF

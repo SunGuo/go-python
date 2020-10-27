@@ -1,12 +1,12 @@
 package python
 
-//#include "Python.h"
-//#include <stdlib.h>
-//#include <string.h>
-//int _gopy_PyRun_SimpleString(const char *command)
-//{return PyRun_SimpleString(command);}
+//#include "go-python.h"
 import "C"
-import "unsafe"
+
+import (
+	"fmt"
+	"unsafe"
+)
 
 // very high level interface
 
@@ -19,12 +19,9 @@ func Py_Main(args []string) int {
 	var argv []*C.char = make([]*C.char, argc)
 	for idx, arg := range args {
 		argv[idx] = C.CString(arg)
+		// no need to free. Py_Main takes owner ship.
+		//defer C.free(unsafe.Pointer(argv[idx]))
 	}
-	defer func() {
-		for idx, _ := range argv {
-			C.free(unsafe.Pointer(argv[idx]))
-		}
-	}()
 	return int(C.Py_Main(argc, &argv[0]))
 }
 
@@ -34,6 +31,30 @@ func PyRun_SimpleString(command string) int {
 	c_cmd := C.CString(command)
 	defer C.free(unsafe.Pointer(c_cmd))
 	return int(C._gopy_PyRun_SimpleString(c_cmd))
+}
+
+// PyRun_SimpleFile executes the given python script synchronously.  Note that
+// unlike the corresponding C API, this will internally open and close the file
+// for you.
+func PyRun_SimpleFile(filename string) error {
+	cfname := C.CString(filename)
+	defer C.free(unsafe.Pointer(cfname))
+
+	cronly := C.CString("r")
+	defer C.free(unsafe.Pointer(cronly))
+
+	cfile, err := C.fopen(cfname, cronly)
+	if err != nil || cfile == nil {
+		return fmt.Errorf("python: could not open %s: %v", filename, err)
+	}
+	defer C.fclose(cfile)
+
+	retcode := C.PyRun_SimpleFileExFlags(cfile, cfname, 0, nil)
+	if retcode != 0 {
+		return fmt.Errorf("error %d executing script %s", int(retcode),
+			filename)
+	}
+	return nil
 }
 
 // EOF

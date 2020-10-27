@@ -1,27 +1,11 @@
 package python
 
-/*
-#include "Python.h"
-#include <stdlib.h>
-#include <string.h>
-
-// FIXME we should instead have a exceptions_windows.go file...
-# ifndef WIN32
-PyObject* PyErr_SetFromWindowsErr(int ierr) { return NULL; }
-PyObject* PyErr_SetExcFromWindowsErr(PyObject *type, int ierr) { return NULL; }
-PyObject* PyErr_SetFromWindowsErrWithFilename(int ierr, const char *filename) { return NULL; }
-PyObject* PyErr_SetExcFromWindowsErrWithFilename(PyObject *type, int ierr, char *filename) { return NULL; }
-
-# endif
-
-int _gopy_PyErr_WarnPy3k(char *message, int stacklevel) 
-{ return PyErr_WarnPy3k(message, stacklevel);}
-
-*/
+// #include "go-python.h"
 import "C"
-import "unsafe"
 
-//import "fmt"
+import (
+	"unsafe"
+)
 
 // void PyErr_PrintEx(int set_sys_last_vars)
 // Print a standard traceback to sys.stderr and clear the error indicator. Call this function only when the error indicator is set. (Otherwise it will cause a fatal error!)
@@ -77,6 +61,10 @@ func PyErr_Clear() {
 //
 // Note This function is normally only used by code that needs to handle exceptions or by code that needs to save and restore the error indicator temporarily.
 func PyErr_Fetch() (exc, val, tb *PyObject) {
+	exc = &PyObject{}
+	val = &PyObject{}
+	tb = &PyObject{}
+
 	C.PyErr_Fetch(&exc.ptr, &val.ptr, &tb.ptr)
 	return
 }
@@ -258,12 +246,6 @@ func PyErr_SetInterrupt() {
 	C.PyErr_SetInterrupt()
 }
 
-// int PySignal_SetWakeupFd(int fd)
-// This utility function specifies a file descriptor to which a '\0' byte will be written whenever a signal is received. It returns the previous such file descriptor. The value -1 disables the feature; this is the initial state. This is equivalent to signal.set_wakeup_fd() in Python, but without any error checking. fd should be a valid file descriptor. The function should only be called from the main thread.
-func PySignal_SetWakeupFd(fd int) int {
-	return int(C.PySignal_SetWakeupFd(C.int(fd)))
-}
-
 // PyObject* PyErr_NewException(char *name, PyObject *base, PyObject *dict)
 // Return value: New reference.
 // This utility function creates and returns a new exception object. The name argument must be the name of the new exception, a C string of the form module.class. The base and dict arguments are normally NULL. This creates a class object derived from Exception (accessible in C as PyExc_Exception).
@@ -293,7 +275,6 @@ func PyErr_NewExceptionWithDoc(name, doc string, base, dict *PyObject) *PyObject
 
 // void PyErr_WriteUnraisable(PyObject *obj)
 // This utility function prints a warning message to sys.stderr when an exception has been set but it is impossible for the interpreter to actually raise the exception. It is used, for example, when an exception occurs in an __del__() method.
-
 // The function is called with a single argument obj that identifies the context in which the unraisable exception occurred. The repr of obj will be printed in the warning message.
 func PyErr_WriteUnraisable(obj *PyObject) {
 	C.PyErr_WriteUnraisable(topy(obj))

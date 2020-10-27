@@ -1,33 +1,13 @@
 package python
 
-/*
-#include "Python.h"
-#include <stdlib.h>
-#include <string.h>
-
-#ifdef USE_STACKCHECK
- int _gopy_PyOS_CheckStack(void) { return PyOS_CheckStack(); }
-#else
- int _gopy_PyOS_CheckStack(void) { return 0; }
-#endif
-
- PyObject* _gopy_PyImport_ImportModuleEx(char *name, PyObject *globals, PyObject *locals, PyObject *fromlist) { return PyImport_ImportModuleEx(name, globals, locals, fromlist); }
-
- //void _gopy_PySys_WriteStdout(const char *data) {
- // PySys_WriteStdout("%s", data)
- //}
-
- #include "marshal.h"
- #include "frameobject.h"
-
-*/
+// #include "go-python.h"
 import "C"
+
 import (
 	"errors"
+	"fmt"
 	"unsafe"
 )
-
-import "fmt"
 
 ////// Operating System Utilities //////
 
@@ -164,7 +144,7 @@ var atexit_funcs []func()
 // Register a cleanup function to be called by Py_Finalize(). The cleanup function will be called with no arguments and should return no value. At most 32 cleanup functions can be registered. When the registration is successful, Py_AtExit() returns 0; on failure, it returns -1. The cleanup function registered last is called first. Each cleanup function will be called at most once. Since Python’s internal finalization will have completed before the cleanup function, no Python APIs should be called by func.
 func Py_AtExit(fct func()) error {
 	atexit_funcs = append(atexit_funcs, fct)
-	//c_fct := 
+	//c_fct :=
 	// FIXME
 	panic("not implemented")
 	return errors.New("C<->go callbacks are hard")
@@ -488,5 +468,3 @@ func PyEval_GetFuncDesc(fct *PyObject) string {
 	c_name := C.PyEval_GetFuncDesc(topy(fct))
 	return C.GoString(c_name)
 }
-
-// EOF

@@ -1,41 +1,11 @@
 package python
 
-/*
-#include "Python.h"
-#include <stdlib.h>
-#include <string.h>
-
-int _gopy_PyByteArray_Check(PyObject *o) { return PyByteArray_Check(o); }
-int _gopy_PyByteArray_CheckExact(PyObject *o) { return PyByteArray_CheckExact(o); }
-
-char* _gopy_PyByteArray_AS_STRING(PyObject *bytearray) { return PyByteArray_AS_STRING(bytearray); }
-
- Py_ssize_t _gopy_PyByteArray_GET_SIZE(PyObject *bytearray) { return PyByteArray_GET_SIZE(bytearray); }
-
-int _gopy_PyTuple_Check(PyObject *o) { return PyTuple_Check(o); }
-int _gopy_PyTuple_CheckExact(PyObject *o) { return PyTuple_CheckExact(o); }
-Py_ssize_t _gopy_PyTuple_GET_SIZE(PyObject *p) { return PyTuple_GET_SIZE(p); }
-void _gopy_PyTuple_SET_ITEM(PyObject *p, Py_ssize_t pos, PyObject *o) { PyTuple_SET_ITEM(p, pos, o); }
-PyObject* _gopy_PyTuple_GET_ITEM(PyObject *p, Py_ssize_t pos) { return PyTuple_GET_ITEM(p, pos); }
-
-int _gopy_PyList_Check(PyObject *o) { return PyList_Check(o); }
-int _gopy_PyList_CheckExact(PyObject *o) { return PyList_CheckExact(o); }
-Py_ssize_t _gopy_PyList_GET_SIZE(PyObject *o) { return PyList_GET_SIZE(o); }
-PyObject* _gopy_PyList_GET_ITEM(PyObject *list, Py_ssize_t i) { return PyList_GET_ITEM(list, i); }
-void _gopy_PyList_SET_ITEM(PyObject *list, Py_ssize_t i, PyObject *o) { PyList_SET_ITEM(list, i, o); }
-
-int _gopy_PyString_Check(PyObject *o) { return PyString_Check(o); }
-Py_ssize_t _gopy_PyString_GET_SIZE(PyObject *o) { return PyString_GET_SIZE(o);}
-char* _gopy_PyString_AS_STRING(PyObject *o) { return PyString_AS_STRING(o); }
-
-int _gopy_PyObject_CheckBuffer(PyObject *obj) { return PyObject_CheckBuffer(obj); }
-
- int _gopy_PyMemoryView_Check(PyObject *obj) { return PyMemoryView_Check(obj); }
- Py_buffer *_gopy_PyMemoryView_GET_BUFFER(PyObject *obj) { return PyMemoryView_GET_BUFFER(obj); }
-
-*/
+// #include "go-python.h"
 import "C"
-import "unsafe"
+
+import (
+	"unsafe"
+)
 
 //////// bytearray ////////
 
@@ -84,6 +54,23 @@ func PyByteArray_Size(self *PyObject) int {
 func PyByteArray_AsString(self *PyObject) string {
 	c_str := C.PyByteArray_AsString(topy(self))
 	return C.GoString(c_str)
+}
+
+// PyByteArray_AsBytes returns the contents of bytearray as []bytes
+func PyByteArray_AsBytes(self *PyObject) []byte {
+	length := C._gopy_PyByteArray_GET_SIZE(topy(self))
+	c_str := C.PyByteArray_AsString(topy(self))
+	return C.GoBytes(unsafe.Pointer(c_str), C.int(length))
+}
+
+// PyByteArray_AsBytesN returns the contents of bytearray as []bytes, size length
+func PyByteArray_AsBytesN(self *PyObject, length int) []byte {
+	blength := int(C._gopy_PyByteArray_GET_SIZE(topy(self)))
+	if (blength < length) || (length < 0) {
+		panic("bytearray length out of range")
+	}
+	c_str := C.PyByteArray_AsString(topy(self))
+	return C.GoBytes(unsafe.Pointer(c_str), C.int(length))
 }
 
 // int PyByteArray_Resize(PyObject *bytearray, Py_ssize_t len)
@@ -336,8 +323,9 @@ func PyList_Append(self, item *PyObject) error {
 //
 // Changed in version 2.5: This function used an int for low and high. This might require changes in your code for properly supporting 64-bit systems.
 func PyList_SetSlice(self *PyObject, low, high int, itemlist *PyObject) error {
-	err := C.PyList_SetSlice(topy(self), C.Py_ssize_t(low), C.Py_ssize_t(high),
-		topy(itemlist))
+	err := C.PyList_SetSlice(
+		topy(self), C.Py_ssize_t(low), C.Py_ssize_t(high), topy(itemlist),
+	)
 	return int2err(err)
 }
 
@@ -372,6 +360,7 @@ type PyString PyObject
 func PyString_Check(self *PyObject) bool {
 	return int2bool(C._gopy_PyString_Check(self.ptr))
 }
+
 // func (self *PyString) Check() int {
 // 	return int(C.PyString_Check(self.topy()))
 // }
@@ -520,7 +509,7 @@ func PyString_Format(format, args *PyObject) *PyObject {
 // Intern the argument *string in place. The argument must be the address of a pointer variable pointing to a Python string object. If there is an existing interned string that is the same as *string, it sets *string to it (decrementing the reference count of the old string object and incrementing the reference count of the interned string object), otherwise it leaves *string alone and interns it (incrementing its reference count). (Clarification: even though there is a lot of talk about reference counts, think of this function as reference-count-neutral; you own the object after the call if and only if you owned it before the call.)
 //
 // Note This function is not available in 3.x and does not have a PyBytes alias.
-func PyString_InternInPlance(self *PyObject) {
+func PyString_InternInPlace(self *PyObject) {
 	//FIXME check everything is OK...
 	s := topy(self)
 	C.PyString_InternInPlace(&s)

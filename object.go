@@ -1,20 +1,25 @@
 package python
 
-//#include "Python.h"
-//#include <stdlib.h>
-//#include <string.h>
-//int _gopy_PyObject_DelAttr(PyObject *o, PyObject *attr_name)
-//{return PyObject_DelAttr(o, attr_name);}
-//int _gopy_PyObject_DelAttrString(PyObject *o, const char *attr_name)
-//{return PyObject_DelAttrString(o,attr_name);}
+//#include "go-python.h"
 import "C"
-import "unsafe"
-import "os"
-import "fmt"
+
+import (
+	"fmt"
+	"os"
+	"strings"
+	"unsafe"
+)
 
 // PyObject layer
 type PyObject struct {
 	ptr *C.PyObject
+}
+
+// String returns a string representation of the PyObject
+func (self *PyObject) String() string {
+	o := self.Str()
+	defer o.DecRef()
+	return PyString_AsString(o)
 }
 
 func (self *PyObject) topy() *C.PyObject {
@@ -22,10 +27,30 @@ func (self *PyObject) topy() *C.PyObject {
 }
 
 func topy(self *PyObject) *C.PyObject {
+	if self == nil {
+		return nil
+	}
 	return self.ptr
 }
+
 func togo(obj *C.PyObject) *PyObject {
-	return &PyObject{ptr: obj}
+	switch obj {
+	case nil:
+		return nil
+	case Py_None.ptr:
+		return Py_None
+	case Py_True.ptr:
+		return Py_True
+	case Py_False.ptr:
+		return Py_False
+	default:
+		return &PyObject{ptr: obj}
+	}
+}
+
+// PyObject_FromVoidPtr converts a PyObject from an unsafe.Pointer
+func PyObject_FromVoidPtr(ptr unsafe.Pointer) *PyObject {
+	return togo((*C.PyObject)(ptr))
 }
 
 func int2bool(i C.int) bool {
@@ -76,15 +101,47 @@ func int2err(i C.int) error {
 		return nil
 	}
 	//FIXME: also handle python exceptions ?
-	return &gopy_err{fmt.Sprintf("error in C-Python (rc=%i)", int(i))}
-}
-
-func file2py(f *os.File) *C.FILE {
-	return nil
+	return &gopy_err{fmt.Sprintf("error in C-Python (rc=%d)", int(i))}
 }
 
 func file2go(f *C.FILE) *os.File {
 	return nil
+}
+
+// C.PyObject* PyObject_GetCPointer(PyObject *o)
+// Returns the internal C pointer to CPython object.
+func (self *PyObject) GetCPointer() *C.PyObject {
+	return self.ptr
+}
+
+// void Py_IncRef(PyObject *o)
+// Increment the reference count for object o. The object may be
+// NULL, in which case the function has no effect.
+func (self *PyObject) IncRef() {
+	C.Py_IncRef(self.ptr)
+}
+
+// void Py_DecRef(PyObject *o)
+// Decrement the reference count for object o. If the object is
+// NULL, nothing happens. If the reference count reaches zero, the
+// object’s type’s deallocation function (which must not be NULL) is
+// invoked.
+// WARNING: The deallocation function can cause arbitrary Python
+// code to be invoked. See the warnings and instructions in the
+// Python docs, and consider using Clear instead.
+func (self *PyObject) DecRef() {
+	C.Py_DecRef(self.ptr)
+}
+
+// void Py_CLEAR(PyObject *o)
+// Clear sets the PyObject's internal pointer to nil
+// before calling Py_DecRef. This avoids the potential issues with
+// Python code called by the deallocator referencing invalid,
+// partially-deallocated data.
+func (self *PyObject) Clear() {
+	tmp := self.ptr
+	self.ptr = nil
+	C.Py_DecRef(tmp)
 }
 
 // int PyObject_HasAttr(PyObject *o, PyObject *attr_name)
@@ -107,6 +164,14 @@ func (self *PyObject) HasAttrString(attr_name string) int {
 // Retrieve an attribute named attr_name from object o. Returns the attribute value on success, or NULL on failure. This is the equivalent of the Python expression o.attr_name.
 func (self *PyObject) GetAttr(attr_name *PyObject) *PyObject {
 	return togo(C.PyObject_GetAttr(self.ptr, attr_name.ptr))
+}
+
+// PyObject* PyObject_Dir()
+// Return value: New reference.
+// This is equivalent to the Python expression dir(o), returning a (possibly empty) list of strings appropriate for the object argument, or NULL if there was an error. If the argument is NULL, this is like the Python dir(), returning the names of the current locals; in this case, if no execution frame is active then NULL is returned but PyErr_Occurred() will return false.
+func (self *PyObject) PyObject_Dir() *PyObject {
+	return togo(C.PyObject_Dir(self.ptr))
+
 }
 
 // PyObject* PyObject_GetAttrString(PyObject *o, const char *attr_name)
@@ -258,6 +323,13 @@ func (self *PyObject) Check_Callable() bool {
 	return int2bool(C.PyCallable_Check(self.ptr))
 }
 
+// PyObject* PyObject_Call(PyObject *callable_object, PyObject *args, PyObject *kw)
+// Return value: New reference.
+// Call a callable Python object callable_object, with arguments given by the tuple args, and named arguments given by the dictionary kw. If no named arguments are needed, kw may be NULL. args must not be NULL, use an empty tuple if no arguments are needed. Returns the result of the call on success, or NULL on failure. This is the equivalent of the Python expression apply(callable_object, args, kw) or callable_object(*args, **kw).
+func (self *PyObject) Call(args, kw *PyObject) *PyObject {
+	return togo(C.PyObject_Call(self.ptr, args.ptr, kw.ptr))
+}
+
 // PyObject* PyObject_CallObject(PyObject *callable_object, PyObject *args)
 // Return value: New reference.
 // Call a callable Python object callable_object, with arguments given by the tuple args. If no arguments are needed, then args may be NULL. Returns the result of the call on success, or NULL on failure. This is the equivalent of the Python expression apply(callable_object, args) or callable_object(*args).
@@ -268,30 +340,104 @@ func (self *PyObject) CallObject(args *PyObject) *PyObject {
 // PyObject* PyObject_CallFunction(PyObject *callable, char *format, ...)
 // Return value: New reference.
 // Call a callable Python object callable, with a variable number of C arguments. The C arguments are described using a Py_BuildValue() style format string. The format may be NULL, indicating that no arguments are provided. Returns the result of the call on success, or NULL on failure. This is the equivalent of the Python expression apply(callable, args) or callable(*args). Note that if you only pass PyObject * args, PyObject_CallFunctionObjArgs() is a faster alternative.
-func (self *PyObject) CallFunction(format string, args ...interface{}) *PyObject {
-	//FIXME
-	panic("not implemented")
-	return nil
+func (self *PyObject) CallFunction(args ...interface{}) *PyObject {
+	if len(args) > int(C._gopy_max_varargs) {
+		panic(fmt.Errorf(
+			"gopy: maximum number of varargs (%d) exceeded (%d)",
+			int(C._gopy_max_varargs),
+			len(args),
+		))
+	}
+
+	types := make([]string, 0, len(args))
+	cargs := make([]unsafe.Pointer, 0, len(args))
+
+	for _, arg := range args {
+		ptr, typ := pyfmt(arg)
+		types = append(types, typ)
+		cargs = append(cargs, ptr)
+		if typ == "s" {
+			defer func(ptr unsafe.Pointer) {
+				C.free(ptr)
+			}(ptr)
+		}
+	}
+
+	if len(args) <= 0 {
+		o := C._gopy_PyObject_CallFunction(self.ptr, 0, nil, nil)
+		return togo(o)
+	}
+
+	pyfmt := C.CString(strings.Join(types, ""))
+	defer C.free(unsafe.Pointer(pyfmt))
+	o := C._gopy_PyObject_CallFunction(
+		self.ptr,
+		C.int(len(args)),
+		pyfmt,
+		unsafe.Pointer(&cargs[0]),
+	)
+
+	return togo(o)
+
 }
 
 // PyObject* PyObject_CallMethod(PyObject *o, char *method, char *format, ...)
 // Return value: New reference.
 // Call the method named method of object o with a variable number of C arguments. The C arguments are described by a Py_BuildValue() format string that should produce a tuple. The format may be NULL, indicating that no arguments are provided. Returns the result of the call on success, or NULL on failure. This is the equivalent of the Python expression o.method(args). Note that if you only pass PyObject * args, PyObject_CallMethodObjArgs() is a faster alternative.
-func (self *PyObject) CallMethod(format string, args ...interface{}) *PyObject {
-	//FIXME
-	panic("not implemented")
-	return nil
+func (self *PyObject) CallMethod(method string, args ...interface{}) *PyObject {
+	if len(args) > int(C._gopy_max_varargs) {
+		panic(fmt.Errorf(
+			"gopy: maximum number of varargs (%d) exceeded (%d)",
+			int(C._gopy_max_varargs),
+			len(args),
+		))
+	}
+
+	cmethod := C.CString(method)
+	defer C.free(unsafe.Pointer(cmethod))
+
+	types := make([]string, 0, len(args))
+	cargs := make([]unsafe.Pointer, 0, len(args))
+
+	for _, arg := range args {
+		ptr, typ := pyfmt(arg)
+		types = append(types, typ)
+		cargs = append(cargs, ptr)
+		if typ == "s" {
+			defer func(ptr unsafe.Pointer) {
+				C.free(ptr)
+			}(ptr)
+		}
+	}
+
+	if len(args) <= 0 {
+		o := C._gopy_PyObject_CallMethod(self.ptr, cmethod, 0, nil, nil)
+		return togo(o)
+	}
+
+	pyfmt := C.CString(strings.Join(types, ""))
+	defer C.free(unsafe.Pointer(pyfmt))
+	o := C._gopy_PyObject_CallMethod(
+		self.ptr,
+		cmethod,
+		C.int(len(args)),
+		pyfmt,
+		unsafe.Pointer(&cargs[0]),
+	)
+
+	return togo(o)
 }
 
 /*
- FIXME: varargs in cgo ?
-
 PyObject* PyObject_CallFunctionObjArgs(PyObject *callable, ..., NULL)
 Return value: New reference.
 Call a callable Python object callable, with a variable number of PyObject* arguments. The arguments are provided as a variable number of parameters followed by NULL. Returns the result of the call on success, or NULL on failure.
 
 New in version 2.2.
 */
+func (self *PyObject) CallFunctionObjArgs(format string, args ...interface{}) *PyObject {
+	return self.CallFunction(args...)
+}
 
 /*
 PyObject* PyObject_CallMethodObjArgs(PyObject *o, PyObject *name, ..., NULL)
@@ -300,6 +446,9 @@ Calls a method of the object o, where the name of the method is given as a Pytho
 
 New in version 2.2.
 */
+func (self *PyObject) CallMethodObjArgs(method string, args ...interface{}) *PyObject {
+	return self.CallMethod(method, args...)
+}
 
 // long PyObject_Hash(PyObject *o)
 // Compute and return the hash value of an object o. On failure, return -1. This is the equivalent of the Python expression hash(o).

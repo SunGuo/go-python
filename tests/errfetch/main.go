@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/sbinet/go-python"
 )
 
@@ -13,8 +14,6 @@ func init() {
 }
 
 func main() {
-	gostr := "foo"
-	pystr := python.PyString_FromString(gostr)
-	str := python.PyString_AsString(pystr)
-	fmt.Println("hello [", str, "]")
+	exc, val, tb := python.PyErr_Fetch()
+	fmt.Printf("exc=%v\nval=%v\ntb=%v\n", exc, val, tb)
 }

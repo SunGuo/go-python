@@ -1,23 +1,11 @@
 package python
 
-//#include "Python.h"
-//#include <stdlib.h>
-//#include <string.h>
-//int _gopy_PyInt_Check(PyObject *o) { return PyInt_Check(o); }
-//int _gopy_PyInt_CheckExact(PyObject *o) { return PyInt_CheckExact(o); }
-//long _gopy_PyInt_AS_LONG(PyObject *io) { return PyInt_AS_LONG(io); }
-//int _gopy_PyLong_Check(PyObject *o) { return PyLong_Check(o); }
-//int _gopy_PyLong_CheckExact(PyObject *o) { return PyLong_CheckExact(o); }
-//int _gopy_PyBool_Check(PyObject *o) { return PyBool_Check(o); }
-//PyObject *_gopy_pyfalse(void) { return Py_False; }
-//PyObject *_gopy_pytrue(void) { return Py_True; }
-//int _gopy_PyFloat_Check(PyObject *o) { return PyFloat_Check(o); }
-//int _gopy_PyFloat_CheckExact(PyObject *o) { return PyFloat_CheckExact(o); }
-//double _gopy_PyFloat_AS_DOUBLE(PyObject *pyfloat) { return PyFloat_AS_DOUBLE(pyfloat); }
-//int _gopy_PyComplex_Check(PyObject *o) { return PyComplex_Check(o); }
-//int _gopy_PyComplex_CheckExact(PyObject *o) { return PyComplex_CheckExact(o); }
+//#include "go-python.h"
 import "C"
-import "unsafe"
+
+import (
+	"unsafe"
+)
 
 // int PyInt_Check(PyObject *o)
 // Return true if o is of type PyInt_Type or a subtype of PyInt_Type.
@@ -38,16 +26,16 @@ func PyInt_CheckExact(self *PyObject) bool {
 // PyObject* PyInt_FromString(char *str, char **pend, int base)
 // Return value: New reference.
 // Return a new PyIntObject or PyLongObject based on the string value in str,
-// which is interpreted according to the radix in base. If pend is non-NULL, 
-// *pend will point to the first character in str which follows the 
+// which is interpreted according to the radix in base. If pend is non-NULL,
+// *pend will point to the first character in str which follows the
 // representation of the number. If base is 0, the radix will be determined
-// based on the leading characters of str: if str starts with '0x' or '0X', 
+// based on the leading characters of str: if str starts with '0x' or '0X',
 // radix 16 will be used; if str starts with '0', radix 8 will be used; otherwise
-// radix 10 will be used. If base is not 0, it must be between 2 and 36, 
+// radix 10 will be used. If base is not 0, it must be between 2 and 36,
 // inclusive. Leading spaces are ignored. If there are no digits, ValueError will
 //  be raised. If the string represents a number too large to be contained within
-//  the machine’s long int type and overflow warnings are being suppressed, a 
-// PyLongObject will be returned. If overflow warnings are not being suppressed, 
+//  the machine’s long int type and overflow warnings are being suppressed, a
+// PyLongObject will be returned. If overflow warnings are not being suppressed,
 // NULL will be returned in this case.
 func PyInt_FromString(str string, pend, base int) *PyObject {
 	c_str := C.CString(str)
@@ -298,7 +286,6 @@ func PyLong_AsUnsignedLongLong(self *PyObject) uint64 {
 	return uint64(C.PyLong_AsUnsignedLongLong(topy(self)))
 }
 
-
 // unsigned long PyLong_AsUnsignedLongMask(PyObject *io)
 // Return a C unsigned long from a Python long integer, without checking for overflow.
 //
@@ -306,7 +293,6 @@ func PyLong_AsUnsignedLongLong(self *PyObject) uint64 {
 func PyLong_AsUnsignedLongMask(self *PyObject) uint64 {
 	return uint64(C.PyLong_AsUnsignedLongMask(topy(self)))
 }
-
 
 // unsigned PY_LONG_LONG PyLong_AsUnsignedLongLongMask(PyObject *io)
 // Return a C unsigned long long from a Python long integer, without checking for overflow.
@@ -316,13 +302,11 @@ func PyLong_AsUnsignedLongLongMask(self *PyObject) uint64 {
 	return uint64(C.PyLong_AsUnsignedLongLongMask(topy(self)))
 }
 
-
 // double PyLong_AsDouble(PyObject *pylong)
 // Return a C double representation of the contents of pylong. If pylong cannot be approximately represented as a double, an OverflowError exception is raised and -1.0 will be returned.
 func PyLong_AsDouble(self *PyObject) float64 {
 	return float64(C.PyLong_AsDouble(topy(self)))
 }
-
 
 // void* PyLong_AsVoidPtr(PyObject *pylong)
 // Convert a Python integer or long integer pylong to a C void pointer. If pylong cannot be converted, an OverflowError will be raised. This is only assured to produce a usable void pointer for values created with PyLong_FromVoidPtr().
@@ -345,17 +329,16 @@ func PyBool_Check(self *PyObject) bool {
 	return int2bool(C._gopy_PyBool_Check(topy(self)))
 }
 
-
-// The Python False object. This object has no methods. 
-// It needs to be treated just like any other object with respect to 
+// The Python False object. This object has no methods.
+// It needs to be treated just like any other object with respect to
 // reference counts.
-var Py_False = togo(C._gopy_pyfalse())
+var Py_False = &PyObject{ptr: C._gopy_pyfalse()}
 
 // PyObject* Py_True
-// The Python True object. This object has no methods. 
-// It needs to be treated just like any other object with respect to 
+// The Python True object. This object has no methods.
+// It needs to be treated just like any other object with respect to
 // reference counts.
-var Py_True = togo(C._gopy_pytrue())
+var Py_True = &PyObject{ptr: C._gopy_pytrue()}
 
 /*
 Py_RETURN_FALSE
@@ -406,20 +389,20 @@ func PyFloat_FromString(str *PyObject) *PyObject {
 // PyObject* PyFloat_FromDouble(double v)
 // Return value: New reference.
 // Create a PyFloatObject object from v, or NULL on failure.
-func PyFloat_FromDouble(v float32) *PyObject {
+func PyFloat_FromDouble(v float64) *PyObject {
 	return togo(C.PyFloat_FromDouble(C.double(v)))
 }
 
 // double PyFloat_AsDouble(PyObject *pyfloat)
 // Return a C double representation of the contents of pyfloat. If pyfloat is not a Python floating point object but has a __float__() method, this method will first be called to convert pyfloat into a float.
-func PyFloat_AsDouble(self *PyObject) float32 {
-	return float32(C.PyFloat_AsDouble(topy(self)))
+func PyFloat_AsDouble(self *PyObject) float64 {
+	return float64(C.PyFloat_AsDouble(topy(self)))
 }
 
 // double PyFloat_AS_DOUBLE(PyObject *pyfloat)
 // Return a C double representation of the contents of pyfloat, but without error checking.
-func PyFloat_AS_DOUBLE(self *PyObject) float32 {
-	return float32(C._gopy_PyFloat_AS_DOUBLE(topy(self)))
+func PyFloat_AS_DOUBLE(self *PyObject) float64 {
+	return float64(C._gopy_PyFloat_AS_DOUBLE(topy(self)))
 }
 
 // PyObject* PyFloat_GetInfo(void)
@@ -434,16 +417,16 @@ func PyFloat_GetInfo() *PyObject {
 // Return the maximum representable finite float DBL_MAX as C double.
 //
 // New in version 2.6.
-func PyFloat_GetMax() float32 {
-	return float32(C.PyFloat_GetMax())
+func PyFloat_GetMax() float64 {
+	return float64(C.PyFloat_GetMax())
 }
 
 // double PyFloat_GetMin()
 // Return the minimum normalized positive float DBL_MIN as C double.
 //
 // New in version 2.6.
-func PyFloat_GetMin() float32 {
-	return float32(C.PyFloat_GetMin())
+func PyFloat_GetMin() float64 {
+	return float64(C.PyFloat_GetMin())
 }
 
 // int PyFloat_ClearFreeList()
@@ -475,7 +458,6 @@ func PyFloat_AsReprString(buf []byte, v *C.PyFloatObject) {
 	//FIXME ?
 	panic("not implemented")
 }
-
 
 /////////// complex ///////////
 
@@ -530,6 +512,5 @@ func PyComplex_AsCComplex(op *PyObject) C.Py_complex {
 	// FIXME ? use go-complex ?
 	return C.PyComplex_AsCComplex(topy(op))
 }
-
 
 // EOF
